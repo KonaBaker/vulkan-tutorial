@@ -113,7 +113,7 @@ class HelloTriangleApplication
             return !!(queueFamilyProperties.queueFlags & vk::QueueFlagBits::eGraphics);
         });
 
-        // Extensions checkr equiredDeviceExtension
+        // Extensions check
         auto availableDeviceExtensions = physicalDevice.enumerateDeviceExtensionProperties();
         bool supportsAllRequiredExtensions = std::ranges::all_of(
             requiredDeviceExtension, [&availableDeviceExtensions](auto const& requiredDeviceExtension){
