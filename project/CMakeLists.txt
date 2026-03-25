@@ -178,7 +178,7 @@ add_chapter (00_base_code)
 
 add_chapter (01_instance_creation)
 #
-# add_chapter (02_validation_layers)
+add_chapter (02_validation_layers)
 #
 # add_chapter (03_physical_device_selection)
 #
