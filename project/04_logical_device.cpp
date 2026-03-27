@@ -15,6 +15,7 @@ import vulkan_hpp;
 
 const uint32_t WIDTH  = 800;
 const uint32_t HEIGHT = 600;
+const float queuePriority = 1.0;
 
 const std::vector<char const*> validationLayers = {
 	"VK_LAYER_KHRONOS_validation"
@@ -43,6 +44,9 @@ class HelloTriangleApplication
     vk::raii::Instance instance = nullptr;
 
     vk::raii::PhysicalDevice physicalDevice = nullptr;
+	vk::raii::Device device = nullptr;
+
+	vk::raii::Queue graphicsQueue = nullptr;
 
 	std::vector<const char *> requiredDeviceExtension = {
 	    vk::KHRSwapchainExtensionName};
@@ -85,6 +89,7 @@ class HelloTriangleApplication
 	{
         createInstance();
         pickPhysicalDevice();
+		createLogicalDevice();
 	}
 
 	void mainLoop()
@@ -144,6 +149,45 @@ class HelloTriangleApplication
 
         physicalDevice = *iter;
     }
+
+	void createLogicalDevice()
+	{
+		// queue
+		auto queueFamilyProperties = physicalDevice.getQueueFamilyProperties();
+		auto graphicsQueueIter = std::ranges::find_if(queueFamilyProperties, [&](auto const& queueFamily){
+			return !!(queueFamily.queueFlags & vk::QueueFlagBits::eGraphics);
+		});
+		auto graphicsQueueIndex = static_cast<uint32_t>(std::distance(queueFamilyProperties.begin(), graphicsQueueIter));
+		std::cout<< graphicsQueueIndex<< "===="<<std::endl;
+		vk::DeviceQueueCreateInfo deviceQueueCreateInfo = {
+			.queueFamilyIndex = graphicsQueueIndex,
+			.queueCount = 1,
+			.pQueuePriorities = &queuePriority,
+		};
+
+		// feature
+		vk::StructureChain
+		<
+			vk::PhysicalDeviceFeatures2,
+			vk::PhysicalDeviceVulkan13Features,
+			vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT
+		> featureChain = {
+			{},
+			{.dynamicRendering = true},
+			{.extendedDynamicState = true},
+		};
+
+		// create
+		vk::DeviceCreateInfo deviceCreateInfo = {
+			.pNext = &featureChain.get<vk::PhysicalDeviceFeatures2>(),
+			.queueCreateInfoCount = 1,
+			.pQueueCreateInfos = &deviceQueueCreateInfo,
+			.enabledExtensionCount = static_cast<uint32_t>(requiredDeviceExtension.size()),
+			.ppEnabledExtensionNames = requiredDeviceExtension.data(),
+		};
+		device = vk::raii::Device(physicalDevice, deviceCreateInfo);
+		graphicsQueue = vk::raii::Queue(device, graphicsQueueIndex, 0);
+	}
 };
 
 int main()
