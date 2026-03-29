@@ -36,7 +36,7 @@ if(ENABLE_CPP20_MODULE)
           Vulkan::Vulkan
   )
 
-  set_target_properties(VulkanCppModule PROPERTIES CXX_STANDARD 20)
+  set_target_properties(VulkanCppModule PROPERTIES CXX_STANDARD 23)
 
   # Add MSVC-specific compiler options for proper C++ module support
   if(MSVC)
@@ -130,7 +130,7 @@ function (add_chapter CHAPTER_NAME)
   add_executable (${CHAPTER_NAME} ${CHAPTER_NAME}.cpp)
   set_target_properties (${CHAPTER_NAME} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CHAPTER_NAME})
-  set_target_properties (${CHAPTER_NAME} PROPERTIES CXX_STANDARD 20)
+  set_target_properties (${CHAPTER_NAME} PROPERTIES CXX_STANDARD 23)
   target_link_libraries (${CHAPTER_NAME} Vulkan::cppm glfw)
   target_include_directories (${CHAPTER_NAME} PRIVATE ${STB_INCLUDEDIR})
 
@@ -184,7 +184,7 @@ add_chapter (03_physical_device_selection)
 #
 add_chapter (04_logical_device)
 #
-# add_chapter (05_window_surface)
+add_chapter (05_window_surface)
 #
 # add_chapter (06_swap_chain_creation)
 #
