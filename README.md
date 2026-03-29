@@ -4,5 +4,5 @@ Learn vulkan from [Khronos Vulkan Tutorial](https://github.com/KhronosGroup/Vulk
 - Dynamic rendering instead of render passes
 - Timeline semaphores
 - Slang as the primary shading language
-- Modern C++ (20) with modules
+- Modern C++ (20 & 23) with modules
 - Vulkan-Hpp with RAII
