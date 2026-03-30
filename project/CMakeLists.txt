@@ -186,7 +186,7 @@ add_chapter (04_logical_device)
 #
 add_chapter (05_window_surface)
 #
-# add_chapter (06_swap_chain_creation)
+add_chapter (06_swap_chain_creation)
 #
 # add_chapter (07_image_views)
 #
