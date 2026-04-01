@@ -149,10 +149,10 @@ function (add_chapter CHAPTER_NAME)
   endif()
 
   if (DEFINED CHAPTER_SHADER)
-    set (CHAPTER_SHADER_TARGET ${CHAPTER_NAME}_shader)
-    file (GLOB SHADER_SOURCES ${CHAPTER_SHADER}.frag ${CHAPTER_SHADER}.vert ${CHAPTER_SHADER}.comp)
-    add_shaders_target (${CHAPTER_SHADER_TARGET} CHAPTER_NAME ${CHAPTER_NAME} SOURCES ${SHADER_SOURCES})
-    add_dependencies (${CHAPTER_NAME} ${CHAPTER_SHADER_TARGET})
+    # set (CHAPTER_SHADER_TARGET ${CHAPTER_NAME}_shader)
+    # file (GLOB SHADER_SOURCES ${CHAPTER_SHADER}.frag ${CHAPTER_SHADER}.vert ${CHAPTER_SHADER}.comp)
+    # add_shaders_target (${CHAPTER_SHADER_TARGET} CHAPTER_NAME ${CHAPTER_NAME} SOURCES ${SHADER_SOURCES})
+    # add_dependencies (${CHAPTER_NAME} ${CHAPTER_SHADER_TARGET})
 
     set (CHAPTER_SHADER_SLANG_TARGET ${CHAPTER_NAME}_slang_shader)
     file (GLOB SHADER_SLANG_SOURCES ${CHAPTER_SHADER}.slang)
@@ -190,10 +190,10 @@ add_chapter (06_swap_chain_creation)
 #
 add_chapter (07_image_views)
 #
-# add_chapter (08_graphics_pipeline)
+add_chapter (08_graphics_pipeline)
 #
-# add_chapter (09_shader_modules
-#   SHADER 09_shader_base)
+add_chapter (09_shader_modules
+  SHADER 09_shader_base)
 #
 # add_chapter (10_fixed_functions
 #   SHADER 09_shader_base)
