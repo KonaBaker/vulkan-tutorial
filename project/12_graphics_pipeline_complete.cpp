@@ -59,6 +59,7 @@ class HelloTriangleApplication
     vk::Extent2D           swapChainExtent;
 
 	vk::raii::PipelineLayout pipelineLayout = nullptr;
+    vk::raii::Pipeline graphicsPipeline = nullptr;
 
 
 	std::vector<const char *> requiredDeviceExtension = {
@@ -346,6 +347,28 @@ class HelloTriangleApplication
 		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{.setLayoutCount = 0, .pushConstantRangeCount = 0};
 		pipelineLayout = vk::raii::PipelineLayout(device, pipelineLayoutInfo);
 
+        // dynamic rendering
+        vk::PipelineRenderingCreateInfo renderingInfo = {
+            .colorAttachmentCount = 1,
+            .pColorAttachmentFormats = &swapChainSurfaceFormat.format,
+        };
+
+        vk::GraphicsPipelineCreateInfo pipelineInfo = {
+            .pNext = &renderingInfo,
+            .stageCount = 2,
+            .pStages = shaderStages,
+            .pVertexInputState = &vertexInput,
+            .pInputAssemblyState = &inputAssembly,
+            .pViewportState = &viewportState,
+            .pRasterizationState = &rasterizer,
+            .pMultisampleState = &multisampling,
+            .pDepthStencilState = &depthStencil,
+            .pColorBlendState = &colorBlendOp,
+            .layout = pipelineLayout,
+            .renderPass = nullptr, // dynamic rendering does not use render pass}
+        };
+
+        graphicsPipeline = vk::raii::Pipeline(device, nullptr, pipelineInfo);
     }
 
     vk::SurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR>& availableFormats)
