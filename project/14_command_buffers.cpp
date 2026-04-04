@@ -51,6 +51,7 @@ class HelloTriangleApplication
 	vk::raii::Device device = nullptr;
 
 	vk::raii::Queue graphicsQueue = nullptr;
+	uint32_t graphicsQueueIndex = 0;
 
     vk::raii::SwapchainKHR swapChain = nullptr;
     std::vector<vk::Image> swapChainImages;
@@ -61,6 +62,7 @@ class HelloTriangleApplication
 	vk::raii::PipelineLayout pipelineLayout = nullptr;
     vk::raii::Pipeline graphicsPipeline = nullptr;
     vk::raii::CommandPool commandPool = nullptr;
+	vk::raii::CommandBuffer commandBuffer = nullptr;
 
 
 	std::vector<const char *> requiredDeviceExtension = {
@@ -110,6 +112,8 @@ class HelloTriangleApplication
 		createImageViews();
         createGraphicsPipeline();
         createCommandPool();
+		createCommandBuffer();
+
 
 	}
 
@@ -197,7 +201,7 @@ class HelloTriangleApplication
 		// queue
 		auto queueFamilyPropertiesVector = physicalDevice.getQueueFamilyProperties();
 
-		uint32_t graphicsQueueIndex = ~0;
+		graphicsQueueIndex = ~0;
 		for(auto [index, queueFamilyProperties] : queueFamilyPropertiesVector | std::views::enumerate) {
 			if(!!(queueFamilyProperties.queueFlags & vk::QueueFlagBits::eGraphics) && physicalDevice.getSurfaceSupportKHR(
 				static_cast<uint32_t>(index),
@@ -210,7 +214,6 @@ class HelloTriangleApplication
 		if(graphicsQueueIndex == ~0) {
 			throw std::runtime_error("physical device does not support graphics queue!");
 		}
-		std::cout<< graphicsQueueIndex<< "===="<<std::endl;
 
 		vk::DeviceQueueCreateInfo deviceQueueCreateInfo = {
 			.queueFamilyIndex = graphicsQueueIndex,
@@ -379,8 +382,66 @@ class HelloTriangleApplication
 
     void createCommandPool()
     {
-
+		vk::CommandPoolCreateInfo poolInfo = {
+			.flags = vk::CommandPoolCreateFlagBits::eTransient,
+			.queueFamilyIndex = 0
+		};
+		commandPool = vk::raii::CommandPool(device, poolInfo);
     }
+
+	void createCommandBuffer()
+	{
+		vk::CommandBufferAllocateInfo bufferInfo = {
+			.commandPool = commandPool,
+			.level = vk::CommandBufferLevel::ePrimary,
+			.commandBufferCount = 1
+		};
+		commandBuffer = std::move(vk::raii::CommandBuffers(device, bufferInfo).front());
+	}
+
+	void transition_image_layout(
+	    uint32_t                imageIndex,
+	    vk::ImageLayout         old_layout,
+	    vk::ImageLayout         new_layout,
+	    vk::AccessFlags2        src_access_mask,
+	    vk::AccessFlags2        dst_access_mask,
+	    vk::PipelineStageFlags2 src_stage_mask,
+	    vk::PipelineStageFlags2 dst_stage_mask)
+	{
+			vk::ImageMemoryBarrier2 barrier = {
+				.srcStageMask        = src_stage_mask,
+				.srcAccessMask       = src_access_mask,
+				.dstStageMask        = dst_stage_mask,
+				.dstAccessMask       = dst_access_mask,
+				.oldLayout           = old_layout,
+				.newLayout           = new_layout,
+				.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+				.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+				.image               = swapChainImages[imageIndex],
+				.subresourceRange    = {
+					.aspectMask     = vk::ImageAspectFlagBits::eColor,
+					.baseMipLevel   = 0,
+					.levelCount     = 1,
+					.baseArrayLayer = 0,
+					.layerCount     = 1}};
+			vk::DependencyInfo dependencyInfo = {
+				.dependencyFlags         = {},
+				.imageMemoryBarrierCount = 1,
+				.pImageMemoryBarriers    = &barrier};
+		commandBuffer.pipelineBarrier2(dependencyInfo);
+	}
+
+	// void recordCommandBuffer(uint32_t imageIndex)
+	// {
+	// 	vk::ClearValue clearVaule = 
+	// 	vk::RenderingAttachmentInfo attachmentInfo = {
+	// 		.imageView = swapChainImageViews[imageIndex],
+	// 		.imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
+	// 		.loadOp = vk::AttachmentLoadOp::eClear,
+	// 		.storeOp = vk::AttachmentStoreOp::eStore,
+	// 		.clearValue = clearValue
+	// 	};
+	// }
 
     vk::SurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR>& availableFormats)
     {
