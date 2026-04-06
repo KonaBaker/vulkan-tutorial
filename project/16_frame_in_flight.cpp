@@ -17,6 +17,7 @@ import vulkan_hpp;
 constexpr uint32_t WIDTH  = 800;
 constexpr uint32_t HEIGHT = 600;
 constexpr float queuePriority = 1.0;
+constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 
 const std::vector<char const*> validationLayers = {
 	"VK_LAYER_KHRONOS_validation"
@@ -62,11 +63,11 @@ class HelloTriangleApplication
 	vk::raii::PipelineLayout pipelineLayout = nullptr;
     vk::raii::Pipeline graphicsPipeline = nullptr;
     vk::raii::CommandPool commandPool = nullptr;
-	vk::raii::CommandBuffer commandBuffer = nullptr;
+	std::vector<vk::raii::CommandBuffer> commandBuffers;
 
-	vk::raii::Semaphore imageAvailableSemaphore = nullptr;
+	std::vector<vk::raii::Semaphore> imageAvailableSemaphores;
 	std::vector<vk::raii::Semaphore> renderFinishedSemaphores;
-	vk::raii::Fence preFrameFence = nullptr;
+	std::vector<vk::raii::Fence> preFrameFences;
 
 
 	std::vector<const char *> requiredDeviceExtension = {
@@ -116,7 +117,7 @@ class HelloTriangleApplication
 		createImageViews();
         createGraphicsPipeline();
         createCommandPool();
-		createCommandBuffer();
+		createCommandBuffers();
 		createSyncObjects();
 	}
 
@@ -399,29 +400,38 @@ class HelloTriangleApplication
 		commandPool = vk::raii::CommandPool(device, poolInfo);
     }
 
-	void createCommandBuffer()
+	void createCommandBuffers()
 	{
+		commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
 		vk::CommandBufferAllocateInfo bufferInfo = {
 			.commandPool = commandPool,
 			.level = vk::CommandBufferLevel::ePrimary,
-			.commandBufferCount = 1
+			.commandBufferCount = MAX_FRAMES_IN_FLIGHT
 		};
-		commandBuffer = std::move(vk::raii::CommandBuffers(device, bufferInfo).front());
+		commandBuffers = vk::raii::CommandBuffers(device, bufferInfo);
 	}
 
 	void createSyncObjects()
 	{
-		imageAvailableSemaphore = vk::raii::Semaphore(device, vk::SemaphoreCreateInfo());
-		renderFinishedSemaphores.clear();
+        assert(imageAvailableSemaphores.empty() && renderFinishedSemaphores.empty() && preFrameFences.empty());
+
+        // imageAvailableSemaphores
+		imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+		std::fill(imageAvailableSemaphores.begin(), imageAvailableSemaphores.end(), vk::raii::Semaphore(device, vk::SemaphoreCreateInfo()));
+		
+        // renderFinishedSemaphores
 		renderFinishedSemaphores.reserve(swapChainImages.size());
 		for (size_t i = 0; i < swapChainImages.size(); ++i)
 		{
 			renderFinishedSemaphores.emplace_back(device, vk::SemaphoreCreateInfo());
 		}
+
+        // preFrameFences
 		vk::FenceCreateInfo fenceCreateInfo = {
 			.flags = vk::FenceCreateFlagBits::eSignaled
 		};
-		preFrameFence = vk::raii::Fence(device, fenceCreateInfo);
+		preFrameFences.resize(MAX_FRAMES_IN_FLIGHT);
+		std::fill(preFrameFences.begin(), preFrameFences.end(), vk::raii::Fence(device, fenceCreateInfo));
 	}
 
 	void transition_image_layout(
