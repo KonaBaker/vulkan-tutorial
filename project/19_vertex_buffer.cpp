@@ -25,6 +25,24 @@ struct Vertex
 {
 	glm::vec2 pos;
 	glm::vec3 color;
+
+	static vk::VertexInputBindingDescription getBindingDescription()
+	{
+		vk::VertexInputBindingDescription bindingDescription {
+			.binding = 0,
+			.stride = sizeof(Vertex),
+			.inputRate = vk::VertexInputRate::eVertex
+		};
+		return bindingDescription;
+	}
+
+	static std::array<vk::VertexInputAttributeDescription, 2> getAttributeDescription()
+	{
+		return {{
+			{.location = 0, .binding = 0, .format = vk::Format::eR32G32Sfloat, .offset = offsetof(Vertex, pos)}, 
+			{.location = 1, .binding = 0, .format = vk::Format::eR32G32B32Sfloat, .offset = offsetof(Vertex, color)}
+		}};	
+	}
 };
 
 constexpr std::array<Vertex, 3> vertices = {{
@@ -79,6 +97,9 @@ class HelloTriangleApplication
     vk::raii::Pipeline graphicsPipeline = nullptr;
     vk::raii::CommandPool commandPool = nullptr;
 	std::vector<vk::raii::CommandBuffer> commandBuffers;
+
+	vk::raii::Buffer vertexBuffer = nullptr;
+	vk::raii::DeviceMemory vertexMemory = nullptr;
 
 	std::vector<vk::raii::Semaphore> imageAvailableSemaphores;
 	std::vector<vk::raii::Semaphore> renderFinishedSemaphores;
@@ -141,6 +162,7 @@ class HelloTriangleApplication
 		createImageViews();
         createGraphicsPipeline();
         createCommandPool();
+		createVertexBuffer();
 		createCommandBuffers();
 		createSyncObjects();
 	}
@@ -355,9 +377,13 @@ class HelloTriangleApplication
 		vk::PipelineShaderStageCreateInfo shaderStages[] = {vertCreateInfo, fragCreateInfo};
 
 		// vertex input
+		auto vertexBindingDescriptions = Vertex::getBindingDescription();
+		auto vertexAttributeDescriptions = Vertex::getAttributeDescription();
 		vk::PipelineVertexInputStateCreateInfo vertexInput = {
-			.pVertexBindingDescriptions = nullptr,
-			.pVertexAttributeDescriptions = nullptr
+			.vertexBindingDescriptionCount = 1,
+			.pVertexBindingDescriptions = &vertexBindingDescriptions,
+			.vertexAttributeDescriptionCount = static_cast<uint32_t>(vertexAttributeDescriptions.size()),
+			.pVertexAttributeDescriptions = vertexAttributeDescriptions.data()
 		};
 
 		// input assemble
@@ -449,6 +475,43 @@ class HelloTriangleApplication
 		};
 		commandPool = vk::raii::CommandPool(device, poolInfo);
     }
+
+	uint32_t findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties)
+	{
+		vk::PhysicalDeviceMemoryProperties memProperties = physicalDevice.getMemoryProperties();
+		for(uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
+		{
+			if ((typeFilter & (1 << i)) && ((memProperties.memoryTypes[i].propertyFlags & properties) == properties)) {
+				return i;
+			}
+		}
+
+		throw std::runtime_error("failed to find suitable memory type");
+	}
+
+	void createVertexBuffer()
+	{
+		constexpr vk::DeviceSize vertexBufferSize = sizeof(vertices);
+		vk::BufferCreateInfo bufferCreateInfo = {
+			.size = vertexBufferSize,
+			.usage = vk::BufferUsageFlagBits::eVertexBuffer,
+			.sharingMode = vk::SharingMode::eExclusive
+		};
+		vertexBuffer = vk::raii::Buffer(device, bufferCreateInfo);
+
+		vk::MemoryRequirements memRequirements = vertexBuffer.getMemoryRequirements();
+		vk::MemoryAllocateInfo memoryAllocateInfo = {
+			.allocationSize = memRequirements.size,
+			.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent)
+		};
+		vertexMemory = vk::raii::DeviceMemory(device, memoryAllocateInfo);
+
+		vertexBuffer.bindMemory(*vertexMemory, 0);
+
+		auto data = vertexMemory.mapMemory(0, bufferCreateInfo.size);
+		memcpy(data, vertices.data(), static_cast<size_t>(vertexBufferSize));
+		vertexMemory.unmapMemory();
+	}
 
 	void createCommandBuffers()
 	{
@@ -557,7 +620,8 @@ class HelloTriangleApplication
 		commandBuffers[frameIndex].bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline);
 		commandBuffers[frameIndex].setViewport(0, vk::Viewport{0.0f, 0.0f, static_cast<float>(swapChainExtent.width), static_cast<float>(swapChainExtent.height), 0.0f, 1.0f});
 		commandBuffers[frameIndex].setScissor(0, vk::Rect2D{vk::Offset2D{0, 0}, swapChainExtent});
-		commandBuffers[frameIndex].draw(3, 1, 0, 0);
+		commandBuffers[frameIndex].bindVertexBuffers(0, *vertexBuffer, {0});
+		commandBuffers[frameIndex].draw(static_cast<uint32_t>(vertices.size()), 1, 0, 0);
 		commandBuffers[frameIndex].endRendering();
 
 		transition_image_layout(imageIndex, vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR,
@@ -574,7 +638,6 @@ class HelloTriangleApplication
 		if (result != vk::Result::eSuccess) {
 			throw std::runtime_error("device cant wait fence");
 		}
-
 
 		//acquire swap chain image
 		auto [acquireResult, imageIndex] = swapChain.acquireNextImage(
