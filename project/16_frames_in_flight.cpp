@@ -69,6 +69,8 @@ class HelloTriangleApplication
 	std::vector<vk::raii::Semaphore> renderFinishedSemaphores;
 	std::vector<vk::raii::Fence> preFrameFences;
 
+	uint32_t frameIndex = 0;
+
 
 	std::vector<const char *> requiredDeviceExtension = {
 	    vk::KHRSwapchainExtensionName};
@@ -402,7 +404,7 @@ class HelloTriangleApplication
 
 	void createCommandBuffers()
 	{
-		commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+		commandBuffers.reserve(MAX_FRAMES_IN_FLIGHT);
 		vk::CommandBufferAllocateInfo bufferInfo = {
 			.commandPool = commandPool,
 			.level = vk::CommandBufferLevel::ePrimary,
@@ -415,23 +417,24 @@ class HelloTriangleApplication
 	{
         assert(imageAvailableSemaphores.empty() && renderFinishedSemaphores.empty() && preFrameFences.empty());
 
-        // imageAvailableSemaphores
-		imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-		std::fill(imageAvailableSemaphores.begin(), imageAvailableSemaphores.end(), vk::raii::Semaphore(device, vk::SemaphoreCreateInfo()));
-		
+        // imageAvailableSemaphores & preFrameFences
+		vk::FenceCreateInfo fenceCreateInfo = {
+			.flags = vk::FenceCreateFlagBits::eSignaled
+		};
+		imageAvailableSemaphores.reserve(MAX_FRAMES_IN_FLIGHT);
+		preFrameFences.reserve(MAX_FRAMES_IN_FLIGHT);
+		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+		{
+			imageAvailableSemaphores.emplace_back(device, vk::SemaphoreCreateInfo());
+			preFrameFences.emplace_back(device, fenceCreateInfo);
+		}
+
         // renderFinishedSemaphores
 		renderFinishedSemaphores.reserve(swapChainImages.size());
 		for (size_t i = 0; i < swapChainImages.size(); ++i)
 		{
 			renderFinishedSemaphores.emplace_back(device, vk::SemaphoreCreateInfo());
 		}
-
-        // preFrameFences
-		vk::FenceCreateInfo fenceCreateInfo = {
-			.flags = vk::FenceCreateFlagBits::eSignaled
-		};
-		preFrameFences.resize(MAX_FRAMES_IN_FLIGHT);
-		std::fill(preFrameFences.begin(), preFrameFences.end(), vk::raii::Fence(device, fenceCreateInfo));
 	}
 
 	void transition_image_layout(
@@ -463,7 +466,7 @@ class HelloTriangleApplication
 				.dependencyFlags         = {},
 				.imageMemoryBarrierCount = 1,
 				.pImageMemoryBarriers    = &barrier};
-		commandBuffer.pipelineBarrier2(dependencyInfo);
+		commandBuffers[frameIndex].pipelineBarrier2(dependencyInfo);
 	}
 
 	void recordCommandBuffer(uint32_t imageIndex)
@@ -486,39 +489,42 @@ class HelloTriangleApplication
 			.colorAttachmentCount = 1,
 			.pColorAttachments = &attachmentInfo,
 		};
-		
+
 		// begin
-		commandBuffer.begin({});
-		
+		commandBuffers[frameIndex].begin({});
+
 		// layout transition
 		transition_image_layout(imageIndex, vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal,
 			{}, vk::AccessFlagBits2::eColorAttachmentWrite,
 			vk::PipelineStageFlagBits2::eTopOfPipe, vk::PipelineStageFlagBits2::eColorAttachmentOutput);
-		
+
 		// render pass
-		commandBuffer.beginRendering(renderingInfo);
-		commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline);
-		commandBuffer.draw(3, 1, 0, 0);
-		commandBuffer.endRendering();
+		commandBuffers[frameIndex].beginRendering(renderingInfo);
+		commandBuffers[frameIndex].bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline);
+		commandBuffers[frameIndex].draw(3, 1, 0, 0);
+		commandBuffers[frameIndex].endRendering();
 
 		transition_image_layout(imageIndex, vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR,
 			vk::AccessFlagBits2::eColorAttachmentWrite, {},
 			vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::PipelineStageFlagBits2::eBottomOfPipe);
-		
-		commandBuffer.end();
+
+		commandBuffers[frameIndex].end();
 	}
 
 	void drawFrame()
 	{
 		// wait for pre frame
-		auto result = device.waitForFences(*preFrameFence, vk::True, std::numeric_limits<uint64_t>::max());
+		auto result = device.waitForFences(*preFrameFences[frameIndex], vk::True, std::numeric_limits<uint64_t>::max());
 		if(result != vk::Result::eSuccess) {
 			std::runtime_error("device cant wait fence");
 		}
-		device.resetFences(*preFrameFence);
+		device.resetFences(*preFrameFences[frameIndex]);
 
 		//acquire swap chain image
-		auto [acquireResult, imageIndex] = swapChain.acquireNextImage(std::numeric_limits<uint64_t>::max(), *imageAvailableSemaphore, nullptr);
+		auto [acquireResult, imageIndex] = swapChain.acquireNextImage(
+			std::numeric_limits<uint64_t>::max(),
+			*imageAvailableSemaphores[frameIndex],
+			nullptr);
 		if(acquireResult != vk::Result::eSuccess) {
 			std::runtime_error("cant get next image from swap chain");
 		}
@@ -531,14 +537,14 @@ class HelloTriangleApplication
 		vk::PipelineStageFlags waitStage(vk::PipelineStageFlagBits::eColorAttachmentOutput);
 		vk::SubmitInfo submitInfo = {
 			.waitSemaphoreCount = 1,
-			.pWaitSemaphores = &*imageAvailableSemaphore,
+			.pWaitSemaphores = &*imageAvailableSemaphores[frameIndex],
 			.pWaitDstStageMask = &waitStage,
 			.commandBufferCount = 1,
-			.pCommandBuffers = &*commandBuffer,
+			.pCommandBuffers = &*commandBuffers[frameIndex],
 			.signalSemaphoreCount = 1,
-			.pSignalSemaphores = &*renderFinishedSemaphore,
+			.pSignalSemaphores = &*renderFinishedSemaphores[imageIndex],
 		};
-		graphicsQueue.submit(submitInfo, *preFrameFence);
+		graphicsQueue.submit(submitInfo, *preFrameFences[frameIndex]);
 
 		// present
 		vk::PresentInfoKHR presentInfo = {
@@ -549,6 +555,8 @@ class HelloTriangleApplication
 			.pImageIndices = &imageIndex
 		};
 		graphicsQueue.presentKHR(presentInfo);
+
+		frameIndex = (frameIndex + 1) % MAX_FRAMES_IN_FLIGHT;
 	}
 
     vk::SurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR>& availableFormats)
