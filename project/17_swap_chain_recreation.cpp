@@ -1,3 +1,4 @@
+#define VULKAN_HPP_HANDLE_ERROR_OUT_OF_DATE_AS_SUCCESS
 #include <algorithm>
 #include <cstdlib>
 #include <iostream>
@@ -32,6 +33,7 @@ const std::vector<char const*> validationLayers = {
 class HelloTriangleApplication
 {
   public:
+	bool framebufferResized = false;
 	void run()
 	{
 		initWindow();
@@ -68,9 +70,7 @@ class HelloTriangleApplication
 	std::vector<vk::raii::Semaphore> imageAvailableSemaphores;
 	std::vector<vk::raii::Semaphore> renderFinishedSemaphores;
 	std::vector<vk::raii::Fence> preFrameFences;
-
 	uint32_t frameIndex = 0;
-
 
 	std::vector<const char *> requiredDeviceExtension = {
 	    vk::KHRSwapchainExtensionName};
@@ -80,14 +80,23 @@ class HelloTriangleApplication
 		glfwInit();
 
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-		glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+		glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
 		window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
+		glfwSetWindowUserPointer(window, this);
+		glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
 	}
+
+	static void framebufferResizeCallback(GLFWwindow* window, int width, int height)
+	{
+		auto appPointer = reinterpret_cast<HelloTriangleApplication*>(glfwGetWindowUserPointer(window));
+		appPointer -> framebufferResized = true;
+	}
+
 
     void createInstance()
     {
-        constexpr vk::ApplicationInfo appInfo{
+        constexpr vk::ApplicationInfo appInfo {
             .pApplicationName = "Hello Triangle",
             .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
             .pEngineName = "No Engine",
@@ -98,7 +107,7 @@ class HelloTriangleApplication
 		uint32_t glfwExtensionCount = 0;
 		auto     glfwExtensions     = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 
-		vk::InstanceCreateInfo createInfo{
+		vk::InstanceCreateInfo createInfo {
 			.pApplicationInfo = &appInfo,
 			.enabledLayerCount = static_cast<uint32_t>(validationLayers.size()),
 			.ppEnabledLayerNames = validationLayers.data(),
@@ -140,6 +149,33 @@ class HelloTriangleApplication
 		glfwTerminate();
 	}
 
+	void cleanupSwapChain()
+	{
+		swapChainImageViews.clear();
+		renderFinishedSemaphores.clear();
+		swapChainImages.clear();
+		swapChain = nullptr;
+	}
+
+	void recreateSwapChain()
+	{
+		int width = 0, height = 0;
+		glfwGetFramebufferSize(window, &width, &height);
+		while (width == 0 || height == 0)
+		{
+			glfwWaitEvents();
+			glfwGetFramebufferSize(window, &width, &height);
+		}
+
+		device.waitIdle();
+
+		cleanupSwapChain();
+		createSwapChain();
+		createImageViews();
+		createRenderFinishedSemaphores();
+		framebufferResized = false;
+	}
+
     bool isDeviceSuitable(vk::raii::PhysicalDevice const& physicalDevice)
     {
         // API check
@@ -149,8 +185,8 @@ class HelloTriangleApplication
         auto queueFamilyPropertiesVector = physicalDevice.getQueueFamilyProperties();
 
         bool supportsGraphics = false;
-		for(auto [index, queueFamilyProperties] : queueFamilyPropertiesVector | std::views::enumerate) {
-			if(!!(queueFamilyProperties.queueFlags & vk::QueueFlagBits::eGraphics) && physicalDevice.getSurfaceSupportKHR(
+		for (auto [index, queueFamilyProperties] : queueFamilyPropertiesVector | std::views::enumerate) {
+			if (!!(queueFamilyProperties.queueFlags & vk::QueueFlagBits::eGraphics) && physicalDevice.getSurfaceSupportKHR(
 				static_cast<uint32_t>(index),
 				surface
 			)) {
@@ -164,15 +200,15 @@ class HelloTriangleApplication
 
         // Extensions check
         auto availableDeviceExtensions = physicalDevice.enumerateDeviceExtensionProperties();
-        bool supportsAllRequiredExtensions = std::ranges::all_of(
+        bool supportsAllRequiredExtensions = std::ranges::all_of (
             requiredDeviceExtension, [&availableDeviceExtensions](auto const& requiredDeviceExtension){
-                return std::ranges::any_of(
+                return std::ranges::any_of (
                     availableDeviceExtensions, [&requiredDeviceExtension](auto const& availableDeviceExtension){
                         return strcmp( availableDeviceExtension.extensionName, requiredDeviceExtension ) == 0;
                     });
             });
         // features check
-        auto features = physicalDevice.template getFeatures2<vk::PhysicalDeviceFeatures2,
+        auto features = physicalDevice.template getFeatures2 <vk::PhysicalDeviceFeatures2,
 															vk::PhysicalDeviceVulkan11Features,
                                                             vk::PhysicalDeviceVulkan13Features,
                                                             vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>();
@@ -200,7 +236,7 @@ class HelloTriangleApplication
         auto const iter = std::ranges::find_if(physicalDevices, [&](auto const& physicalDevice){
             return isDeviceSuitable(physicalDevice);
         });
-        if(iter == physicalDevices.end()) {
+        if (iter == physicalDevices.end()) {
             throw std::runtime_error("has no availiable physical device!");
         }
 
@@ -213,7 +249,7 @@ class HelloTriangleApplication
 		auto queueFamilyPropertiesVector = physicalDevice.getQueueFamilyProperties();
 
 		graphicsQueueIndex = ~0;
-		for(auto [index, queueFamilyProperties] : queueFamilyPropertiesVector | std::views::enumerate) {
+		for (auto [index, queueFamilyProperties] : queueFamilyPropertiesVector | std::views::enumerate) {
 			if(!!(queueFamilyProperties.queueFlags & vk::QueueFlagBits::eGraphics) && physicalDevice.getSurfaceSupportKHR(
 				static_cast<uint32_t>(index),
 				surface
@@ -222,7 +258,7 @@ class HelloTriangleApplication
 				break;
 			}
 		}
-		if(graphicsQueueIndex == ~0) {
+		if (graphicsQueueIndex == ~0) {
 			throw std::runtime_error("physical device does not support graphics queue!");
 		}
 
@@ -318,14 +354,12 @@ class HelloTriangleApplication
 		};
 
 		// viewport and scissor
-		vk::Viewport viewport{0.0f, 0.0f, static_cast<float>(swapChainExtent.width), static_cast<float>(swapChainExtent.height), 0.0f, 1.0f};
-		vk::Rect2D scissor{vk::Offset2D{0, 0}, swapChainExtent};
-		vk::PipelineViewportStateCreateInfo viewportState = {
-			.viewportCount = 1,
-			.pViewports = &viewport,
-			.scissorCount = 1,
-			.pScissors = &scissor
+		std::vector<vk::DynamicState>      dynamicStates = {vk::DynamicState::eViewport, vk::DynamicState::eScissor};
+		vk::PipelineDynamicStateCreateInfo dynamicState{
+			.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
+			.pDynamicStates = dynamicStates.data()
 		};
+		vk::PipelineViewportStateCreateInfo      viewportState{.viewportCount = 1, .scissorCount = 1};
 
 		// rasterizer
 		vk::PipelineRasterizationStateCreateInfo rasterizer = {
@@ -386,6 +420,7 @@ class HelloTriangleApplication
             .pMultisampleState = &multisampling,
             .pDepthStencilState = &depthStencil,
             .pColorBlendState = &colorBlendOp,
+            .pDynamicState = &dynamicState,
             .layout = pipelineLayout,
             .renderPass = nullptr, // dynamic rendering does not use render pass}
         };
@@ -430,6 +465,12 @@ class HelloTriangleApplication
 		}
 
         // renderFinishedSemaphores
+		createRenderFinishedSemaphores();
+	}
+
+	void createRenderFinishedSemaphores()
+	{
+		renderFinishedSemaphores.clear();
 		renderFinishedSemaphores.reserve(swapChainImages.size());
 		for (size_t i = 0; i < swapChainImages.size(); ++i)
 		{
@@ -501,6 +542,8 @@ class HelloTriangleApplication
 		// render pass
 		commandBuffers[frameIndex].beginRendering(renderingInfo);
 		commandBuffers[frameIndex].bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline);
+		commandBuffers[frameIndex].setViewport(0, vk::Viewport{0.0f, 0.0f, static_cast<float>(swapChainExtent.width), static_cast<float>(swapChainExtent.height), 0.0f, 1.0f});
+		commandBuffers[frameIndex].setScissor(0, vk::Rect2D{vk::Offset2D{0, 0}, swapChainExtent});
 		commandBuffers[frameIndex].draw(3, 1, 0, 0);
 		commandBuffers[frameIndex].endRendering();
 
@@ -515,19 +558,24 @@ class HelloTriangleApplication
 	{
 		// wait for pre frame
 		auto result = device.waitForFences(*preFrameFences[frameIndex], vk::True, std::numeric_limits<uint64_t>::max());
-		if(result != vk::Result::eSuccess) {
-			std::runtime_error("device cant wait fence");
+		if (result != vk::Result::eSuccess) {
+			throw std::runtime_error("device cant wait fence");
 		}
-		device.resetFences(*preFrameFences[frameIndex]);
+
 
 		//acquire swap chain image
 		auto [acquireResult, imageIndex] = swapChain.acquireNextImage(
 			std::numeric_limits<uint64_t>::max(),
 			*imageAvailableSemaphores[frameIndex],
 			nullptr);
-		if(acquireResult != vk::Result::eSuccess) {
-			std::runtime_error("cant get next image from swap chain");
+		if (acquireResult == vk::Result::eErrorOutOfDateKHR) {
+			recreateSwapChain();
+			return;
 		}
+		if (acquireResult != vk::Result::eSuccess && acquireResult != vk::Result::eSuboptimalKHR) {
+			throw std::runtime_error("failed to acquire image from swap chain");
+		}
+		device.resetFences(*preFrameFences[frameIndex]);
 
 		// record cmd buffer
 		recordCommandBuffer(imageIndex);
@@ -553,7 +601,13 @@ class HelloTriangleApplication
 			.pSwapchains = &*swapChain,
 			.pImageIndices = &imageIndex
 		};
-		graphicsQueue.presentKHR(presentInfo);
+		auto presentResult = graphicsQueue.presentKHR(presentInfo);
+		if (presentResult == vk::Result::eSuboptimalKHR || presentResult == vk::Result::eErrorOutOfDateKHR || framebufferResized) {
+			recreateSwapChain();
+		}
+		else if (presentResult != vk::Result::eSuccess) {
+			throw std::runtime_error("failed to present");
+		}
 
 		frameIndex = (frameIndex + 1) % MAX_FRAMES_IN_FLIGHT;
 	}
@@ -632,12 +686,15 @@ class HelloTriangleApplication
 			.subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1},
 		};
 
+		swapChainImageViews.clear();
+		swapChainImageViews.reserve(swapChainImages.size());
 		for(const auto& image : swapChainImages) {
 			imageViewCreateInfo.image = image;
 			swapChainImageViews.emplace_back(device, imageViewCreateInfo);
 		}
 	}
 };
+
 
 int main()
 {
