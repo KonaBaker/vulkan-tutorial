@@ -489,28 +489,80 @@ class HelloTriangleApplication
 		throw std::runtime_error("failed to find suitable memory type");
 	}
 
-	void createVertexBuffer()
+	void createBuffer(
+		vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties,
+		vk::SharingMode sharingMode, vk::raii::Buffer& buffer, vk::raii::DeviceMemory& memory
+	)
 	{
-		constexpr vk::DeviceSize vertexBufferSize = sizeof(vertices);
 		vk::BufferCreateInfo bufferCreateInfo = {
-			.size = vertexBufferSize,
-			.usage = vk::BufferUsageFlagBits::eVertexBuffer,
-			.sharingMode = vk::SharingMode::eExclusive
+			.size = size,
+			.usage = usage,
+			.sharingMode = sharingMode
 		};
-		vertexBuffer = vk::raii::Buffer(device, bufferCreateInfo);
+		buffer = vk::raii::Buffer(device, bufferCreateInfo);
 
-		vk::MemoryRequirements memRequirements = vertexBuffer.getMemoryRequirements();
+		vk::MemoryRequirements memRequirements = buffer.getMemoryRequirements();
 		vk::MemoryAllocateInfo memoryAllocateInfo = {
 			.allocationSize = memRequirements.size,
-			.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent)
+			.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties)
 		};
-		vertexMemory = vk::raii::DeviceMemory(device, memoryAllocateInfo);
 
-		vertexBuffer.bindMemory(*vertexMemory, 0);
+		memory = vk::raii::DeviceMemory(device, memoryAllocateInfo);
+		buffer.bindMemory(*memory, 0);
+	}
 
-		auto data = vertexMemory.mapMemory(0, bufferCreateInfo.size);
-		memcpy(data, vertices.data(), static_cast<size_t>(vertexBufferSize));
-		vertexMemory.unmapMemory();
+	void copyBuffer(vk::raii::Buffer& srcBuffer, vk::raii::Buffer& dstBuffer, vk::DeviceSize size)
+	{
+		vk::CommandBufferAllocateInfo cmdCopyInfo = {
+			.commandPool = commandPool,
+			.level = vk::CommandBufferLevel::ePrimary,
+			.commandBufferCount = 1,
+		};
+		vk::raii::CommandBuffer commandCopyBuffer = std::move(device.allocateCommandBuffers(cmdCopyInfo).front());
+
+		vk::CommandBufferBeginInfo cmdCopyBeginInfo = {
+			.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit
+		};
+		commandCopyBuffer.begin(cmdCopyBeginInfo);
+		commandCopyBuffer.copyBuffer(srcBuffer, dstBuffer, vk::BufferCopy(0, 0, size));
+		commandCopyBuffer.end();
+
+		graphicsQueue.submit(vk::SubmitInfo{ .commandBufferCount = 1, .pCommandBuffers = &*commandCopyBuffer }, nullptr);
+		graphicsQueue.waitIdle();
+	}
+
+	void createVertexBuffer()
+	{
+		// staging buffer
+		constexpr vk::DeviceSize stagingBufferSize = sizeof(vertices);
+		vk::raii::Buffer stagingBuffer = nullptr;
+		vk::raii::DeviceMemory stagingMemory = nullptr;
+		createBuffer(
+			stagingBufferSize,
+			vk::BufferUsageFlagBits::eTransferSrc,
+			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+			vk::SharingMode::eExclusive,
+			stagingBuffer,
+			stagingMemory
+		);
+
+		auto data = stagingMemory.mapMemory(0, stagingBufferSize);
+		memcpy(data, vertices.data(), static_cast<size_t>(stagingBufferSize));
+		stagingMemory.unmapMemory();
+
+		// final vertex buffer
+		constexpr vk::DeviceSize vertexBufferSize = sizeof(vertices);
+		createBuffer(
+			vertexBufferSize,
+			vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer,
+			vk::MemoryPropertyFlagBits::eDeviceLocal,
+			vk::SharingMode::eExclusive,
+			vertexBuffer,
+			vertexMemory
+		);
+
+		// copy
+		copyBuffer(stagingBuffer, vertexBuffer, stagingBufferSize);
 	}
 
 	void createCommandBuffers()
