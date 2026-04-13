@@ -248,10 +248,10 @@ add_chapter (26_texture_mapping
   TEXTURES ../../images/texture.jpg
   LIBS glm::glm)
 #
-# add_chapter (27_depth_buffering
-#   SHADER 27_shader_depth
-#   TEXTURES ../../images/texture.jpg
-#   LIBS glm::glm)
+add_chapter (27_depth_buffering
+  SHADER 27_shader_depth
+  TEXTURES ../../images/texture.jpg
+  LIBS glm::glm)
 #
 # add_chapter (28_model_loading
 #   SHADER 27_shader_depth
