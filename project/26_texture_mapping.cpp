@@ -28,6 +28,7 @@ struct Vertex
 {
 	glm::vec2 pos;
 	glm::vec3 color;
+	glm::vec2 texCoord;
 
 	static vk::VertexInputBindingDescription getBindingDescription()
 	{
@@ -39,20 +40,21 @@ struct Vertex
 		return bindingDescription;
 	}
 
-	static std::array<vk::VertexInputAttributeDescription, 2> getAttributeDescription()
+	static std::array<vk::VertexInputAttributeDescription, 3> getAttributeDescription()
 	{
 		return {{
 			{.location = 0, .binding = 0, .format = vk::Format::eR32G32Sfloat, .offset = offsetof(Vertex, pos)},
-			{.location = 1, .binding = 0, .format = vk::Format::eR32G32B32Sfloat, .offset = offsetof(Vertex, color)}
+			{.location = 1, .binding = 0, .format = vk::Format::eR32G32B32Sfloat, .offset = offsetof(Vertex, color)},
+			{.location = 2, .binding = 0, .format = vk::Format::eR32G32Sfloat, .offset = offsetof(Vertex, texCoord)}
 		}};
 	}
 };
 
 constexpr std::array<Vertex, 4> vertices = {{
-    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-    {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-    {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-    {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
+    {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+    {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+    {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
 }};
 
 constexpr std::array<uint16_t, 6> indices = {{
@@ -397,10 +399,13 @@ class HelloTriangleApplication
 	void createDescriptorLayout()
 	{
 		// descriptor layout binding
-		vk::DescriptorSetLayoutBinding uboLayoutBinding(0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex);
+		std::array<vk::DescriptorSetLayoutBinding, 2> layoutBinding = {
+			{{0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex},
+			{1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment}}
+		};
 		vk::DescriptorSetLayoutCreateInfo layoutInfo = {
-			.bindingCount = 1,
-			.pBindings = &uboLayoutBinding
+			.bindingCount = 2,
+			.pBindings = layoutBinding.data()
 		};
 		descriptorSetLayout = vk::raii::DescriptorSetLayout(device, layoutInfo);
 	}
@@ -882,15 +887,15 @@ class HelloTriangleApplication
 
 	void createDescriptorPool()
 	{
-		vk::DescriptorPoolSize descriptorPoolSize = {
-			.type = vk::DescriptorType::eUniformBuffer,
-			.descriptorCount = MAX_FRAMES_IN_FLIGHT
+		std::array<vk::DescriptorPoolSize, 2> descriptorPoolSizes = {
+			{{.type = vk::DescriptorType::eUniformBuffer, .descriptorCount = MAX_FRAMES_IN_FLIGHT},
+			{.type = vk::DescriptorType::eCombinedImageSampler, .descriptorCount = MAX_FRAMES_IN_FLIGHT}}
 		};
 		vk::DescriptorPoolCreateInfo poolInfo = {
 			.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
 			.maxSets = MAX_FRAMES_IN_FLIGHT,
-			.poolSizeCount = 1,
-			.pPoolSizes = &descriptorPoolSize
+			.poolSizeCount = 2,
+			.pPoolSizes = descriptorPoolSizes.data()
 		};
 		descriptorPool = vk::raii::DescriptorPool(device, poolInfo);
 	}
@@ -907,7 +912,7 @@ class HelloTriangleApplication
 		descriptorSets.clear();
 		descriptorSets = device.allocateDescriptorSets(allocateInfo);
 
-		// specify buffer for the every descriptor
+		// specify buffer&image for the every descriptor
 		for(size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
 		{
 			vk::DescriptorBufferInfo bufferInfo = {
@@ -915,17 +920,32 @@ class HelloTriangleApplication
 				.offset = 0,
 				.range = sizeof(UniformBufferObject)
 			};
-
-			vk::WriteDescriptorSet descriptorWrite{
-				.dstSet          = *descriptorSets[i],
-				.dstBinding      = 0,                                 // 对应 shader 里 binding = 0
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType  = vk::DescriptorType::eUniformBuffer,
-				.pBufferInfo     = &bufferInfo
+			vk::DescriptorImageInfo imageInfo = {
+				.sampler = *textureImageSampler,
+				.imageView = *textureImageView,
+				.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
 			};
 
-			device.updateDescriptorSets(descriptorWrite, nullptr);
+			std::array<vk::WriteDescriptorSet, 2> descriptorWrites = {{
+				{
+					.dstSet          = *descriptorSets[i],
+					.dstBinding      = 0,                                 // 对应 shader 里 binding = 0
+					.dstArrayElement = 0,
+					.descriptorCount = 1,
+					.descriptorType  = vk::DescriptorType::eUniformBuffer,
+					.pBufferInfo     = &bufferInfo
+				},
+				{
+					.dstSet          = *descriptorSets[i],
+					.dstBinding      = 1,
+					.dstArrayElement = 0,
+					.descriptorCount = 1,
+					.descriptorType  = vk::DescriptorType::eCombinedImageSampler,
+					.pImageInfo      = &imageInfo
+				}
+			}};
+
+			device.updateDescriptorSets(descriptorWrites, nullptr);
 		}
 	}
 
