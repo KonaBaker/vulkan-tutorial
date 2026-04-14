@@ -1,4 +1,5 @@
 #define STB_IMAGE_IMPLEMENTATION // function body
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <stb_image.h> // only function prototypes
 #include <algorithm>
 #include <cstdlib>
@@ -109,6 +110,10 @@ class HelloTriangleApplication
     vk::SurfaceFormatKHR   swapChainSurfaceFormat;
     vk::Extent2D           swapChainExtent;
 
+	std::vector<vk::Image> depthImages;
+	std::vector<vk::raii::DeviceMemory> depthImageMemory;
+	std::vector<vk::raii::ImageView> depthImageView;
+
 	vk::raii::DescriptorSetLayout descriptorSetLayout = nullptr;
 	vk::raii::DescriptorPool descriptorPool =nullptr;
 	std::vector<vk::raii::DescriptorSet> descriptorSets;
@@ -194,6 +199,7 @@ class HelloTriangleApplication
 		createDescriptorLayout();
         createGraphicsPipeline();
         createCommandPool();
+		createDepthResources();
 		createTextureImage();
 		createTextureImageView();
 		createTextureSampler();
@@ -532,6 +538,11 @@ class HelloTriangleApplication
 		commandPool = vk::raii::CommandPool(device, poolInfo);
     }
 
+	void createDepthResources()
+	{
+
+	}
+
 	uint32_t findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties)
 	{
 		vk::PhysicalDeviceMemoryProperties memProperties = physicalDevice.getMemoryProperties();
@@ -589,7 +600,7 @@ class HelloTriangleApplication
 		graphicsQueue.waitIdle();
 	}
 
-	void transitionImageLayoutSwapChain(
+	void transition_Image_Layout(
 	    uint32_t                imageIndex,
 	    vk::ImageLayout         old_layout,
 	    vk::ImageLayout         new_layout,
@@ -1015,7 +1026,7 @@ class HelloTriangleApplication
 		commandBuffers[frameIndex].begin({});
 
 		// layout transition
-		transitionImageLayoutSwapChain(imageIndex, vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal,
+		transition_Image_Layout(imageIndex, vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal,
 			{}, vk::AccessFlagBits2::eColorAttachmentWrite,
 			vk::PipelineStageFlagBits2::eTopOfPipe, vk::PipelineStageFlagBits2::eColorAttachmentOutput);
 
@@ -1030,7 +1041,7 @@ class HelloTriangleApplication
 		commandBuffers[frameIndex].drawIndexed(indices.size(), 1, 0, 0, 0);
 		commandBuffers[frameIndex].endRendering();
 
-		transitionImageLayoutSwapChain(imageIndex, vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR,
+		transition_Image_Layout(imageIndex, vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR,
 			vk::AccessFlagBits2::eColorAttachmentWrite, {},
 			vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::PipelineStageFlagBits2::eBottomOfPipe);
 
