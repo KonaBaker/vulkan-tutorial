@@ -253,11 +253,11 @@ add_chapter (27_depth_buffering
   TEXTURES ../../images/texture.jpg
   LIBS glm::glm)
 #
-# add_chapter (28_model_loading
-#   SHADER 27_shader_depth
-#   MODELS viking_room.obj
-#   TEXTURES viking_room.png
-#   LIBS glm::glm tinyobjloader::tinyobjloader)
+add_chapter (28_model_loading
+  SHADER 27_shader_depth
+  MODELS viking_room.obj
+  TEXTURES viking_room.png
+  LIBS glm::glm tinyobjloader::tinyobjloader)
 #
 # add_chapter (29_mipmapping
 #   SHADER 27_shader_depth
