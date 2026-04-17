@@ -265,11 +265,11 @@ add_chapter (29_mipmapping
   TEXTURES viking_room.png
   LIBS glm::glm tinyobjloader::tinyobjloader)
 #
-# add_chapter (30_multisampling
-#   SHADER 27_shader_depth
-#   MODELS viking_room.obj
-#   TEXTURES viking_room.png
-#   LIBS glm::glm tinyobjloader::tinyobjloader)
+add_chapter (30_multisampling
+  SHADER 27_shader_depth
+  MODELS viking_room.obj
+  TEXTURES viking_room.png
+  LIBS glm::glm tinyobjloader::tinyobjloader)
 #
 # add_chapter (31_compute_shader
 #   SHADER 31_shader_compute
